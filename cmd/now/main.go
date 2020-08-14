@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-	NowVersion = "1.0.0"
+	NowVersion = "1.1.0"
 )
 
 const (
@@ -34,9 +35,9 @@ const (
 func initFlags(flag *pflag.FlagSet) {
 	flag.BoolP(flagEpoch, "e", false, "print the UNIX Epoch time, which is the duration since midnight on January 1, 1970 UTC.")
 	flag.StringP(flagFormat, "f", "RFC3339Nano", "a constant or a verbose time format")
-	flag.StringP(flagPrecision, "p", "s", "the precision to use for printing the UNIX Epoch time: seconds (s), milliseconds (ms), or nanoseconds (ns)")
+	flag.StringP(flagPrecision, "p", "s", "the precision to use for printing the UNIX Epoch time: seconds (s), milliseconds (ms), microseconds (μs, us), or nanoseconds (ns)")
 	flag.StringP(flagDelta, "d", "0s", "the time delta from the current time in the go duration format")
-	flag.StringP(flagTimeZone, "z", "", "the time zone: either UTC, Local, or name in the IANA Time Zone database (defaults to local time zone)")
+	flag.StringP(flagTimeZone, "z", "", "the time zone: either UTC, Local, fixed zone (UTC+9, UTC+9:30), or name in the IANA Time Zone database (defaults to local time zone)")
 	flag.BoolP(flagVersion, "v", false, "print the version")
 }
 
@@ -107,6 +108,52 @@ func formatDate(d time.Time, format string) (int, error) {
 	return fmt.Fprintf(os.Stdout, "%s\n", d.Format(format))
 }
 
+func parseFixedZoneDuration(str string) (int, error) {
+	direction := 1
+	switch str[0] {
+	case '-':
+		direction = -1
+	case '+':
+	default:
+		return 0, fmt.Errorf("error parsing fixed zone duration from %q", str)
+	}
+	i := strings.Index(str[1:], ":")
+	if i != -1 {
+		if strings.Contains(str[1+i+1:], ":") {
+			return 0, fmt.Errorf("error parsing fixed zone duration from %q", str)
+		}
+		hours, err := strconv.Atoi(str[1 : 1+i])
+		if err != nil {
+			return 0, fmt.Errorf("error parsing fixed zone duration from %q: %w", str, err)
+		}
+		minutes, err := strconv.Atoi(str[1+i+1:])
+		if err != nil {
+			return 0, fmt.Errorf("error parsing fixed zone duration from %q: %w", str, err)
+		}
+		return direction * ((hours * 60 * 60) + (minutes * 60)), nil
+	}
+	value, err := strconv.Atoi(str[1:])
+	if err != nil {
+		return 0, fmt.Errorf("error parsing fized zone %q: %w", str, err)
+	}
+	return direction * value * 60 * 60, nil
+}
+
+func loadLocation(str string) (*time.Location, error) {
+	if str != "UTC" && strings.HasPrefix(str, "UTC") {
+		duration, err := parseFixedZoneDuration(str[3:])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing fixed time zone from %q: %w", str, err)
+		}
+		return time.FixedZone(str, duration), nil
+	}
+	location, err := time.LoadLocation(str)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing time zone from %q: %w", str, err)
+	}
+	return location, nil
+}
+
 func main() {
 
 	now := time.Now()
@@ -145,7 +192,7 @@ The value for the format flag can be in the Go time format or one of the followi
 			d := now.Add(v.GetDuration(flagDelta))
 
 			if len(tz) > 0 {
-				location, err := time.LoadLocation(tz)
+				location, err := loadLocation(tz)
 				if err != nil {
 					return fmt.Errorf("error parsing time zone %q: %w", tz, err)
 				}
@@ -159,7 +206,10 @@ The value for the format flag can be in the Go time format or one of the followi
 					_, _ = fmt.Fprintf(os.Stdout, "%d\n", d.Unix())
 					return nil
 				case "milliseconds", "millisecond", "ms":
-					_, _ = fmt.Fprintf(os.Stdout, "%d\n", d.UnixNano()/1000000)
+					_, _ = fmt.Fprintf(os.Stdout, "%d\n", d.UnixNano()/1e6)
+					return nil
+				case "microseconds", "microsecond", "us", "μs":
+					_, _ = fmt.Fprintf(os.Stdout, "%d\n", d.UnixNano()/1e3)
 					return nil
 				case "nanoseconds", "nanosecond", "ns":
 					_, _ = fmt.Fprintf(os.Stdout, "%d\n", d.UnixNano())

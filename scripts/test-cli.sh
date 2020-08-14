@@ -19,6 +19,10 @@ testEpochMilliseconds() {
   "${DIR}/../bin/now" -e -p ms
 }
 
+testEpochMicroseconds() {
+  "${DIR}/../bin/now" -e -ps us
+}
+
 testEpochNanoseconds() {
   "${DIR}/../bin/now" -e -p ns
 }
@@ -37,6 +41,14 @@ testRFC3339() {
 
 testYearMonthDay() {
   "${DIR}/../bin/now" -f 2006-01-02
+}
+
+testTimeZoneFixed() {
+  "${DIR}/../bin/now" -z UTC+09:30
+}
+
+testTimeZoneNamed() {
+  "${DIR}/../bin/now" -z America/New_York
 }
 
 oneTimeSetUp() {

@@ -48,6 +48,12 @@ now -e -p s
 now -e -p ms
 ```
 
+### UNIX Epoch Time in Microseconds
+
+```shell
+now -e -p us
+```
+
 ### UNIX Epoch Time in Nanoseconds
 
 ```shell
